@@ -9,7 +9,12 @@ app.use(express.json());
 //  service name. Docker's internal DNS resolves "db"
 //  to the farmconnect-db container's IP automatically.
 // ─────────────────────────────────────────────────────
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({ 
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
 // Retry connection (DB may still be initialising)
 async function waitForDB(retries = 10, delay = 2000) {
@@ -75,7 +80,7 @@ app.delete("/farms/:id", async (req, res) => {
 });
 
 // ── Start ─────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 waitForDB().then(() => {
   app.listen(PORT, () =>
     console.log(`🚀  FarmConnect API listening on port ${PORT}`)
