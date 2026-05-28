@@ -1,0 +1,68 @@
+version: "3.9"
+
+# ─────────────────────────────────────────────
+#  FarmConnect – Docker Network Practice Lab
+# ─────────────────────────────────────────────
+# KEY CONCEPT: All services share "farmconnect-net".
+# Inside that network every container is reachable
+# by its SERVICE NAME as a hostname (Docker DNS).
+# Nothing outside this network can reach them unless
+# you explicitly publish ports.
+# ─────────────────────────────────────────────
+
+networks:
+  farmconnect-net:         # <── our isolated network
+    driver: bridge
+    name: farmconnect-net  # explicit name (visible in `docker network ls`)
+
+  # A second network to show ISOLATION in action
+  other-project-net:
+    driver: bridge
+    name: other-project-net
+
+services:
+
+  # ── 1. PostgreSQL database ─────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: farmconnect-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: farmconnect
+      POSTGRES_USER: farm_user
+      POSTGRES_PASSWORD: farm_pass
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - farmconnect-net    # joined ONLY to our network
+    # ⚠️  No "ports:" here → DB is NOT reachable from your
+    #    host machine or other Docker networks. API only.
+
+  # ── 2. Node/Express API ────────────────────
+  api:
+    build: ./api
+    container_name: farmconnect-api
+    restart: unless-stopped
+    environment:
+      # Uses the SERVICE NAME "db" as the hostname – Docker DNS resolves it
+      DATABASE_URL: postgres://farm_user:farm_pass@db:5432/farmconnect
+      PORT: 3000
+    ports:
+      - "3000:3000"        # only the API is published to the host
+    depends_on:
+      - db
+    networks:
+      - farmconnect-net
+
+  # ── 3. Isolated "other project" container ──
+  #    Shows it CANNOT reach farmconnect-db by name
+  outsider:
+    image: alpine:3.19
+    container_name: other-project-container
+    command: sleep infinity   # keep alive so you can exec into it
+    networks:
+      - other-project-net    # different network → no DNS visibility
+
+volumes:
+  db-data:
